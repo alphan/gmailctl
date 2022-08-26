@@ -1,4 +1,4 @@
-module github.com/mbrt/gmailctl
+module github.com/alphan/gmailctl
 
 go 1.17
 
