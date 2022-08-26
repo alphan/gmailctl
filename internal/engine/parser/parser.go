@@ -18,6 +18,19 @@ type Rule struct {
 // Actions contains the actions to be applied to a set of emails.
 type Actions cfg.Actions
 
+func allChildrenLeaves(tree CriteriaAST) bool {
+	t, ok := tree.(*Node)
+	if !ok {
+		return false
+	}
+	for _, child := range t.Children {
+		if !child.IsLeaf() {
+			return false
+		}
+	}
+	return true
+}
+
 // Parse parses config file rules into their intermediate representation.
 //
 // Note that the number of rules and their contents might be different than the
@@ -32,7 +45,37 @@ func Parse(config cfg.Config) ([]Rule, error) {
 				fmt.Sprintf("Rule: %s", reporting.Prettify(rule, false)),
 			)
 		}
-		res = append(res, r)
+
+		root, ok := r.Criteria.(*Node)
+		if ok {
+			left, ok := root.Children[0].(*Node)
+			// {a b c} -{x y z} ->
+			//    a -{x y z}
+			//    b -{x y z}
+			//    c -{x y z}
+			if ok &&
+				allChildrenLeaves(root.Children[0]) &&
+				len(root.Children) == 2 &&
+				root.RootOperation() == OperationAnd &&
+				len(left.Children) > 1 &&
+				root.Children[0].RootOperation() == OperationOr &&
+				root.Children[1].RootOperation() == OperationNot {
+				for _, child := range left.Children {
+					var children []CriteriaAST
+					children = append(children, child)
+					children = append(children, root.Children[1].(*Node).Clone())
+					res = append(res, Rule{
+						Criteria: &Node{
+							Children:  children,
+							Operation: OperationAnd,
+						},
+						Actions: r.Actions,
+					})
+				}
+			}
+		} else {
+			res = append(res, r)
+		}
 	}
 	return res, nil
 }
