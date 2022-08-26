@@ -73,6 +73,34 @@ func Parse(config cfg.Config) ([]Rule, error) {
 					})
 				}
 			}
+
+			leaf, ok := root.Children[0].(*Leaf)
+
+			if ok &&
+				len(root.Children) == 2 &&
+				root.RootOperation() == OperationAnd &&
+				root.Children[0].RootOperation() == OperationOr &&
+				root.Children[1].RootOperation() == OperationNot &&
+				len(leaf.Args) > 1 {
+				for _, arg := range leaf.Args {
+					var children []CriteriaAST
+					children = append(children, &Leaf{
+						Function: FunctionList,
+						Grouping: OperationOr,
+						Args:     []string{arg},
+						IsRaw:    leaf.IsRaw,
+					})
+					children = append(children, root.Children[1].(*Node).Clone())
+					res = append(res, Rule{
+						Criteria: &Node{
+							Children:  children,
+							Operation: OperationAnd,
+						},
+						Actions: r.Actions,
+					})
+				}
+
+			}
 		} else {
 			res = append(res, r)
 		}
